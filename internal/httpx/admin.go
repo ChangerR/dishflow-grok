@@ -67,7 +67,8 @@ func (s *Server) platformStores(w http.ResponseWriter, r *http.Request, p app.Ad
 }
 func (s *Server) createPlatformStore(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal) {
 	var body struct {
-		Name, Timezone string
+		Name     string `json:"name"`
+		Timezone string `json:"timezone"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.CreatePlatformStore(r.Context(), body.Name, body.Timezone)
@@ -101,8 +102,11 @@ func (s *Server) platformUsers(w http.ResponseWriter, r *http.Request, p app.Adm
 }
 func (s *Server) createPlatformUser(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal) {
 	var body struct {
-		LoginName, DisplayName, Password string
-		IsPlatformAdmin, Enabled         bool
+		LoginName       string `json:"login_name"`
+		DisplayName     string `json:"display_name"`
+		Password        string `json:"password"`
+		IsPlatformAdmin bool   `json:"is_platform_admin"`
+		Enabled         bool   `json:"enabled"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if !body.Enabled {
@@ -149,7 +153,10 @@ func (s *Server) listShopApps(w http.ResponseWriter, r *http.Request, p app.Admi
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) reviewShopApp(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal) {
-	var body struct{ Decision, Note string }
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.ReviewShopApplication(r.Context(), p.UserID, chi.URLParam(r, "id"), body.Decision, body.Note)
 	if err != nil {
@@ -208,7 +215,9 @@ func (s *Server) transition(w http.ResponseWriter, r *http.Request, p app.AdminP
 	writeJSON(w, 200, d)
 }
 func (s *Server) storeRefund(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Reason string }
+	var body struct {
+		Reason string `json:"reason"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.App.StoreRefund(r.Context(), storeID, p.UserID, chi.URLParam(r, "id"), body.Reason); err != nil {
 		writeErr(w, r, err)
@@ -232,7 +241,10 @@ func (s *Server) refunds(w http.ResponseWriter, r *http.Request, p app.AdminPrin
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) reviewRefund(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Decision, Note string }
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.App.ReviewCancelRefund(r.Context(), storeID, p.UserID, chi.URLParam(r, "id"), body.Decision, body.Note); err != nil {
 		writeErr(w, r, err)
@@ -563,7 +575,9 @@ func (s *Server) delTpl(w http.ResponseWriter, r *http.Request, p app.AdminPrinc
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 func (s *Server) issueTpl(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Audience string }
+	var body struct {
+		Audience string `json:"audience"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.IssueCoupons(r.Context(), storeID, chi.URLParam(r, "id"), body.Audience)
 	if err != nil {
@@ -743,7 +757,9 @@ func (s *Server) shopMembers(w http.ResponseWriter, r *http.Request, p app.Admin
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) changeRole(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Role string }
+	var body struct {
+		Role string `json:"role"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.App.ChangeMemberRole(r.Context(), storeID, p.Role, chi.URLParam(r, "adminUserId"), body.Role); err != nil {
 		writeErr(w, r, err)
@@ -767,7 +783,10 @@ func (s *Server) joinReqs(w http.ResponseWriter, r *http.Request, p app.AdminPri
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) reviewJoin(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Decision, Note string }
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.ReviewJoinRequest(r.Context(), p, chi.URLParam(r, "id"), body.Decision, body.Note)
 	if err != nil {
@@ -821,7 +840,9 @@ func (s *Server) listPurchases(w http.ResponseWriter, r *http.Request, p app.Adm
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) createPurchase(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Title string }
+	var body struct {
+		Title string `json:"title"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.CreatePurchaseList(r.Context(), storeID, p.UserID, body.Title)
 	if err != nil {
