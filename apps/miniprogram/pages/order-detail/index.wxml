@@ -1,0 +1,8 @@
+<view class="page" wx:if="{{order}}">
+  <view>状态 {{order.status}} 取餐号 {{order.pickup_number}}</view>
+  <view wx:if="{{order.scheduled_for}}">预约 {{order.scheduled_for}}</view>
+  <view wx:for="{{order.items}}" wx:key="sku_id">{{item.product_name}} {{item.sku_name}} x{{item.qty}}</view>
+  <view>应付 ¥{{order.payable_cents / 100}}</view>
+  <button bindtap="cancel">取消</button>
+  <button bindtap="reorder">再来一单</button>
+</view>

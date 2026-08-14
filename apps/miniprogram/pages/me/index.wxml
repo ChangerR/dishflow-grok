@@ -1,0 +1,6 @@
+<view class="page">
+  <view wx:if="{{me.is_member}}">会员 {{me.member_no}} 积分 {{me.points_balance}}</view>
+  <button wx:else bindtap="join">同意协议并入会</button>
+  <button bindtap="goCoupons">优惠券</button>
+  <button bindtap="goStore">门店信息</button>
+</view>

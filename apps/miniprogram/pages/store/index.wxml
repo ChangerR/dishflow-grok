@@ -1,0 +1,9 @@
+<view class="page">
+  <view>{{store.name}} {{store.is_open ? '营业中' : '休息中'}}</view>
+  <view>{{store.business_hours}}</view>
+  <view>{{store.address}}</view>
+  <button bindtap="call">打电话</button>
+  <button bindtap="map">打开地图</button>
+  <view>{{policies.privacy_policy}}</view>
+  <view>{{policies.refund_policy}}</view>
+</view>

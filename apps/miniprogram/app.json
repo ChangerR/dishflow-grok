@@ -1,0 +1,26 @@
+{
+  "pages": [
+    "pages/menu/index",
+    "pages/checkout/index",
+    "pages/pay-result/index",
+    "pages/orders/index",
+    "pages/order-detail/index",
+    "pages/coupons/index",
+    "pages/me/index",
+    "pages/store/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "DishFlow",
+    "navigationBarBackgroundColor": "#c2410c",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "color": "#78716c",
+    "selectedColor": "#c2410c",
+    "list": [
+      { "pagePath": "pages/menu/index", "text": "点餐" },
+      { "pagePath": "pages/orders/index", "text": "订单" },
+      { "pagePath": "pages/me/index", "text": "我的" }
+    ]
+  }
+}
