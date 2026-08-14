@@ -1,0 +1,4 @@
+.page { padding: 24rpx; }
+.head { font-weight: 600; margin-bottom: 16rpx; }
+.cat { margin-top: 24rpx; font-weight: 600; }
+.dish { display: flex; justify-content: space-between; padding: 16rpx 0; border-bottom: 1px solid #eee; }

@@ -1,0 +1,1247 @@
+openapi: 3.0.3
+info:
+  title: DishFlow API
+  version: 1.0.0
+  description: 多门店餐饮点餐与履约系统 HTTP 契约（不含 iOS）
+servers:
+  - url: /
+tags:
+  - name: health
+  - name: customer
+  - name: admin
+  - name: platform
+  - name: callbacks
+paths:
+  /health/live:
+    get:
+      tags: [health]
+      summary: 存活检查
+      responses:
+        "200":
+          description: ok
+  /health/ready:
+    get:
+      tags: [health]
+      summary: 就绪检查
+      responses:
+        "200":
+          description: ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ready"
+        "503":
+          description: not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /media/menu/{path}:
+    get:
+      tags: [customer]
+      summary: 可信菜单图片代理
+      parameters:
+        - in: path
+          name: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: image
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/wechat/session:
+    post:
+      tags: [customer]
+      summary: 微信 code 换顾客会话
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        "200":
+          description: session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  customer_id: { type: string }
+                  store_id: { type: string }
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/storefront/bootstrap:
+    get:
+      tags: [customer]
+      summary: 门店启动信息
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: bootstrap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bootstrap"
+  /api/v1/store:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicStore"
+  /api/v1/store/policies:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: policies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policies"
+  /api/v1/menu:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: menu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerMenu"
+  /api/v1/tables/resolve:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - in: query
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: table
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/pickup-slots:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: slots
+  /api/v1/coupon-offers:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: offers
+  /api/v1/pricing/preview:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewRequest"
+      responses:
+        "200":
+          description: quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewResponse"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/orders:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quote_token]
+              properties:
+                quote_token: { type: string }
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/CartItem"
+                remark: { type: string, maxLength: 100 }
+      responses:
+        "200":
+          description: order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200":
+          description: orders
+  /api/v1/orders/{id}:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /api/v1/orders/{id}/prepay:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: prepay
+  /api/v1/orders/{id}/mock-payment/confirm:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: confirmed
+  /api/v1/orders/{id}/cancel:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: cancel
+  /api/v1/coupons:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - in: query
+          name: status
+          schema: { type: string }
+      responses:
+        "200":
+          description: coupons
+  /api/v1/coupon-offers/{template_id}/claim:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - in: path
+          name: template_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: claimed
+  /api/v1/me:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: me
+  /api/v1/me/membership:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone_code: { type: string }
+                agreed: { type: boolean }
+      responses:
+        "200":
+          description: member
+  /api/v1/me/points:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: ledger
+  /api/v1/me/rewards:
+    get:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+      responses:
+        "200":
+          description: rewards
+  /api/v1/me/rewards/{template_id}/redeem:
+    post:
+      tags: [customer]
+      parameters:
+        - $ref: "#/components/parameters/WechatAppid"
+        - in: path
+          name: template_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: redeemed
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/admin/session:
+    post:
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login_name, password]
+              properties:
+                login_name: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: principal
+    get:
+      tags: [admin]
+      responses:
+        "200":
+          description: principal
+    delete:
+      tags: [admin]
+      responses:
+        "200":
+          description: logged out
+  /api/v1/admin/shop-applications:
+    post:
+      tags: [admin]
+      responses:
+        "200": { description: created }
+  /api/v1/admin/my/shop-applications:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: list }
+  /api/v1/admin/shop-join-requests:
+    post:
+      tags: [admin]
+      responses:
+        "200": { description: created }
+  /api/v1/admin/my/shop-join-requests:
+    get:
+      tags: [admin]
+      responses:
+        "200": { description: list }
+  /api/v1/admin/platform/stores:
+    get:
+      tags: [platform]
+      responses:
+        "200": { description: list }
+    post:
+      tags: [platform]
+      responses:
+        "200": { description: created }
+  /api/v1/admin/platform/stores/{id}:
+    patch:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+  /api/v1/admin/platform/users:
+    get:
+      tags: [platform]
+      responses:
+        "200": { description: list }
+    post:
+      tags: [platform]
+      responses:
+        "200": { description: created }
+  /api/v1/admin/platform/users/{id}:
+    patch:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+  /api/v1/admin/platform/users/{id}/assign-store-owner:
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: assigned }
+  /api/v1/admin/platform/shop-applications:
+    get:
+      tags: [platform]
+      responses:
+        "200": { description: list }
+  /api/v1/admin/platform/shop-applications/{id}/review:
+    post:
+      tags: [platform]
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: reviewed }
+  /api/v1/admin/orders/board:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: board }
+  /api/v1/admin/orders:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+  /api/v1/admin/orders/export:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200":
+          description: csv
+          content:
+            text/csv:
+              schema: { type: string }
+  /api/v1/admin/orders/{id}:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: order }
+  /api/v1/admin/orders/{id}/transitions:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to_status: { type: string }
+                expected_version: { type: integer }
+      responses:
+        "200": { description: order }
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/admin/orders/{id}/refunds:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: refund }
+  /api/v1/admin/orders/{id}/cloud-print:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: queued }
+  /api/v1/admin/refunds:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+  /api/v1/admin/refunds/{id}/review:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: reviewed }
+  /api/v1/admin/exceptions:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+  /api/v1/admin/exceptions/{id}/retry:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: queued }
+  /api/v1/admin/analytics/overview:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: overview }
+  /api/v1/admin/analytics/trends:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: trends }
+  /api/v1/admin/analytics/breakdown:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: breakdown }
+  /api/v1/admin/analytics/customers:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: customers }
+  /api/v1/admin/customer-members:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+  /api/v1/admin/customer-members/{customerId}:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - in: path
+          name: customerId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: member }
+  /api/v1/admin/customer-members/{customerId}/points-adjustments:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - in: path
+          name: customerId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: adjusted }
+  /api/v1/admin/member-settings:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: settings }
+    put:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: settings }
+  /api/v1/admin/categories:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/categories/{id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: deleted }
+  /api/v1/admin/categories/{id}/restore:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: restored }
+  /api/v1/admin/dishes:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/dishes/{id}:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: dish }
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: deleted }
+  /api/v1/admin/dishes/{id}/restore:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: restored }
+  /api/v1/admin/dishes/{id}/stock-adjustments:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: adjusted }
+  /api/v1/admin/uploads:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: uploaded }
+  /api/v1/admin/promotions:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/promotions/{id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+  /api/v1/admin/coupon-templates:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/coupon-templates/{id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: deleted }
+  /api/v1/admin/coupon-templates/{id}/issue:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: issued }
+  /api/v1/admin/tables:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/tables/{id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+  /api/v1/admin/tables/{id}/rotate-token:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: rotated }
+  /api/v1/admin/tables/{id}/miniprogram-code:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: png }
+  /api/v1/admin/store:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: store }
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: store }
+  /api/v1/admin/store/export:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: export }
+  /api/v1/admin/store/import:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: imported }
+  /api/v1/admin/miniprogram-config:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: config }
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: config }
+  /api/v1/admin/payment-config:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: config }
+    put:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: config }
+  /api/v1/admin/mock-payment:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: mock }
+    put:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: mock }
+  /api/v1/admin/audit-logs:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: logs }
+  /api/v1/admin/members:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: members }
+  /api/v1/admin/members/{adminUserId}:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - in: path
+          name: adminUserId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - in: path
+          name: adminUserId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: removed }
+  /api/v1/admin/join-requests:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+  /api/v1/admin/join-requests/{id}/review:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: reviewed }
+  /api/v1/admin/materials:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/materials/{id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: deleted }
+  /api/v1/admin/purchase-lists:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/purchase-lists/{id}:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: list }
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+  /api/v1/admin/purchase-lists/{id}/items:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: added }
+  /api/v1/admin/purchase-lists/{id}/items/{item_id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+        - in: path
+          name: item_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+        - in: path
+          name: item_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: deleted }
+  /api/v1/admin/purchase-lists/{id}/submit:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: submitted }
+  /api/v1/admin/purchase-lists/{id}/mark-printed:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: printed }
+  /api/v1/admin/purchase-lists/{id}/cloud-print:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: queued }
+  /api/v1/admin/purchase-lists/{id}/complete:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: completed }
+  /api/v1/admin/purchase-lists/{id}/void:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: voided }
+  /api/v1/admin/print/config:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: config }
+    put:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: config }
+  /api/v1/admin/print/printers:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: list }
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: created }
+  /api/v1/admin/print/printers/{id}:
+    patch:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: updated }
+    delete:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: deleted }
+  /api/v1/admin/print/printers/{id}/test:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: queued }
+  /api/v1/admin/print/printers/{id}/refresh:
+    post:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200": { description: refreshed }
+  /api/v1/admin/print/jobs:
+    get:
+      tags: [admin]
+      parameters:
+        - $ref: "#/components/parameters/StoreId"
+      responses:
+        "200": { description: jobs }
+  /callbacks/wechat-pay/transactions/{store_id}:
+    post:
+      tags: [callbacks]
+      parameters:
+        - in: path
+          name: store_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: success }
+  /callbacks/wechat-pay/refunds/{store_id}:
+    post:
+      tags: [callbacks]
+      parameters:
+        - in: path
+          name: store_id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: success }
+components:
+  parameters:
+    WechatAppid:
+      in: header
+      name: X-Wechat-Appid
+      required: true
+      schema: { type: string }
+    StoreId:
+      in: header
+      name: X-Store-Id
+      required: true
+      schema: { type: string }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      schema: { type: string }
+    ID:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+  responses:
+    Error:
+      description: error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        request_id: { type: string }
+        details: {}
+    Ready:
+      type: object
+      properties:
+        status: { type: string }
+    Bootstrap:
+      type: object
+      properties:
+        store_id: { type: string }
+        store_name: { type: string }
+        brand_name: { type: string }
+        theme_color: { type: string }
+        logo_url: { type: string }
+        is_open: { type: boolean }
+        announcement: { type: string }
+    PublicStore:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        business_hours: { type: string }
+        is_open: { type: boolean }
+        timezone: { type: string }
+    Policies:
+      type: object
+      properties:
+        privacy_policy: { type: string }
+        refund_policy: { type: string }
+        qualifications: { type: string }
+    CartItem:
+      type: object
+      required: [sku_id, qty]
+      properties:
+        sku_id: { type: string }
+        option_ids:
+          type: array
+          items: { type: string }
+        qty: { type: integer, minimum: 1, maximum: 99 }
+    PreviewRequest:
+      type: object
+      required: [scene, items]
+      properties:
+        scene: { type: string, enum: [DINE_IN, PICKUP] }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        table_token: { type: string }
+        scheduled_for: { type: string, format: date-time }
+        customer_coupon_id: { type: string }
+    PreviewResponse:
+      type: object
+      properties:
+        quote_token: { type: string }
+        expires_at: { type: string, format: date-time }
+        goods_cents: { type: integer, format: int64 }
+        packing_cents: { type: integer, format: int64 }
+        discount_cents: { type: integer, format: int64 }
+        payable_cents: { type: integer, format: int64 }
+        pickup_type: { type: string, enum: [IMMEDIATE, SCHEDULED] }
+        scheduled_for: { type: string, format: date-time }
+    Order:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string }
+        payment_status: { type: string }
+        pickup_type: { type: string }
+        scheduled_for: { type: string, format: date-time }
+        pickup_business_date: { type: string }
+        pickup_number: { type: string }
+        payable_cents: { type: integer, format: int64 }
+        version: { type: integer }
+    CustomerMenu:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              dishes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    from_price_cents: { type: integer, format: int64 }
+                    sold_out: { type: boolean }

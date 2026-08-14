@@ -1,0 +1,14 @@
+{
+  "name": "dishflow",
+  "private": true,
+  "packageManager": "pnpm@10.33.3",
+  "scripts": {
+    "check": "pnpm --recursive run check",
+    "test": "pnpm --recursive run test",
+    "build": "pnpm --recursive run build",
+    "lint:openapi": "npx --yes @redocly/cli lint openapi/openapi.yaml"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

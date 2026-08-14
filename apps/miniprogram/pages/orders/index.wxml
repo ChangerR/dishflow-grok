@@ -1,0 +1,13 @@
+<view class="tabs">
+  <text data-tab="ALL" bindtap="switchTab">全部</text>
+  <text data-tab="PENDING_PAYMENT" bindtap="switchTab">待支付</text>
+  <text data-tab="PREPARING" bindtap="switchTab">制作中</text>
+  <text data-tab="READY" bindtap="switchTab">待取餐</text>
+  <text data-tab="COMPLETED" bindtap="switchTab">已完成</text>
+  <text data-tab="CANCELLED" bindtap="switchTab">已取消</text>
+</view>
+<view wx:for="{{items}}" wx:key="id" bindtap="open" data-id="{{item.id}}" class="card">
+  <view>{{item.pickup_number}} {{item.status}}</view>
+  <view wx:if="{{item.pickup_type==='SCHEDULED'}}">预约 {{item.scheduled_for}}</view>
+  <view>¥{{item.payable_cents / 100}}</view>
+</view>

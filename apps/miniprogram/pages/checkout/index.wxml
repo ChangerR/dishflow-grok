@@ -1,0 +1,9 @@
+<view class="page">
+  <button bindtap="loadSlots">预约取餐</button>
+  <view wx:for="{{slots}}" wx:key="starts_at">
+    <button disabled="{{!item.available}}" data-at="{{item.starts_at}}" bindtap="chooseSlot">{{item.label}} 余{{item.remaining}}</button>
+  </view>
+  <view wx:if="{{quote}}">包装 ¥{{quote.packing_cents / 100}} 优惠 ¥{{quote.discount_cents / 100}} 应付 ¥{{quote.payable_cents / 100}}</view>
+  <input maxlength="100" placeholder="备注" bindinput="onRemark" />
+  <button bindtap="pay">支付</button>
+</view>
