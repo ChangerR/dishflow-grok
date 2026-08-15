@@ -37,6 +37,7 @@ func NewServer(a *app.App) http.Handler {
 	s.R.Post("/callbacks/wechat-pay/transactions/{storeID}", s.payNotify)
 	s.R.Post("/callbacks/wechat-pay/refunds/{storeID}", s.refundNotify)
 	s.R.Route("/api/v1", func(r chi.Router) {
+		r.Use(s.idempotency)
 		r.Post("/auth/wechat/session", s.wechatSession)
 		r.Get("/storefront/bootstrap", s.withStorefront(s.bootstrap))
 		r.Get("/store", s.withStorefront(s.publicStore))
@@ -443,7 +444,7 @@ func (s *Server) createOrder(w http.ResponseWriter, r *http.Request, p app.Custo
 		writeErr(w, r, apperr.Validation("请求体无效"))
 		return
 	}
-	d, err := s.App.CreateOrder(r.Context(), p.StoreID, p.CustomerID, body.QuoteToken, body.Items)
+	d, err := s.App.CreateOrder(r.Context(), p.StoreID, p.CustomerID, body.QuoteToken, body.Items, body.Remark)
 	if err != nil {
 		writeErr(w, r, err)
 		return

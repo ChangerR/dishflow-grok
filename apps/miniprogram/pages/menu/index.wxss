@@ -1,4 +1,7 @@
-.page { padding: 24rpx; }
+.page { padding: 24rpx; padding-bottom: 120rpx; }
 .head { font-weight: 600; margin-bottom: 16rpx; }
 .cat { margin-top: 24rpx; font-weight: 600; }
 .dish { display: flex; justify-content: space-between; padding: 16rpx 0; border-bottom: 1px solid #eee; }
+.desc { color: #78716c; font-size: 24rpx; }
+.mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; }
+.sheet { background: #fff; width: 100%; padding: 32rpx; border-radius: 24rpx 24rpx 0 0; }

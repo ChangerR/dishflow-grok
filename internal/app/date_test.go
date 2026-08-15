@@ -15,3 +15,14 @@ func TestBizDate(t *testing.T) {
 		}
 	}
 }
+
+func TestParseOptionSnapshot(t *testing.T) {
+	names, ids := parseOptionSnapshot(`[{"id":"o1","name":"加辣"}]`)
+	if names[0] != "加辣" || ids[0] != "o1" {
+		t.Fatalf("%v %v", names, ids)
+	}
+	names, ids = parseOptionSnapshot(`["加蛋"]`)
+	if names[0] != "加蛋" || len(ids) != 0 {
+		t.Fatalf("%v %v", names, ids)
+	}
+}

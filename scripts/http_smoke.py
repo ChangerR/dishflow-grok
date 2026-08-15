@@ -49,6 +49,8 @@ class Client:
             hdrs["X-Wechat-Appid"] = self.appid
         if self.bearer:
             hdrs["Authorization"] = "Bearer " + self.bearer
+        if method not in ("GET", "HEAD") and "Idempotency-Key" not in (headers or {}):
+            hdrs["Idempotency-Key"] = f"smoke-{int(time.time()*1000)}-{method}-{path}"
         if headers:
             hdrs.update(headers)
         req = urllib.request.Request(BASE + path, data=data, headers=hdrs, method=method)
@@ -458,6 +460,94 @@ def main() -> int:
         owner.request("PATCH", "/api/v1/admin/store", {"is_open": True})
 
     check("closed store cannot checkout", closed_store_blocks_checkout)
+
+    def history_lists_completed() -> None:
+        _, body = owner.request("GET", "/api/v1/admin/orders")
+        ids = [o.get("id") for o in (body.get("items") or [])]
+        if order_id not in ids:
+            raise Fail(body)
+
+    check("admin history lists completed order without empty status filter", history_lists_completed)
+
+    def promo_and_coupon_choose_better() -> None:
+        owner.request(
+            "POST",
+            "/api/v1/admin/promotions",
+            {
+                "name": "满20减3",
+                "threshold_cents": 2000,
+                "discount_cents": 300,
+                "scope": "ALL",
+                "stack_policy": "BEST_OF",
+                "enabled": True,
+                "starts_at": "2020-01-01T00:00:00Z",
+                "ends_at": "2099-01-01T00:00:00Z",
+            },
+        )
+        _, tpl = owner.request(
+            "POST",
+            "/api/v1/admin/coupon-templates",
+            {
+                "name": "减8券",
+                "min_spend_cents": 0,
+                "discount_cents": 800,
+                "scope": "ALL",
+                "enabled": True,
+                "public_claim": True,
+                "audience": "ALL",
+                "starts_at": "2020-01-01T00:00:00Z",
+                "ends_at": "2099-01-01T00:00:00Z",
+            },
+        )
+        cust.request("POST", f"/api/v1/coupon-offers/{tpl['id']}/claim", {})
+        _, coupons = cust.request("GET", "/api/v1/coupons?status=AVAILABLE")
+        cid = (coupons.get("items") or [{}])[0].get("id")
+        _, quote = cust.request(
+            "POST",
+            "/api/v1/pricing/preview",
+            {"scene": "PICKUP", "items": [{"sku_id": sku_id, "qty": 1}], "customer_coupon_id": cid},
+        )
+        # goods 2800 + packing 100 = 2900; coupon 800 > promo 300
+        if quote.get("discount_cents") != 800:
+            raise Fail(quote)
+
+    check("quote prefers larger coupon over full-reduction", promo_and_coupon_choose_better)
+
+    def membership_join_dev_phone() -> None:
+        _, me = cust.request("POST", "/api/v1/me/membership", {"phone_code": "13800138000", "agreed": True})
+        if not me.get("is_member"):
+            raise Fail(me)
+        _, again = cust.request("POST", "/api/v1/me/membership", {"phone_code": "13800138000", "agreed": True})
+        if again.get("member_no") != me.get("member_no"):
+            raise Fail(again)
+
+    check("membership join is idempotent in dev", membership_join_dev_phone)
+
+    def idempotent_preview_order() -> None:
+        _, quote = cust.request(
+            "POST",
+            "/api/v1/pricing/preview",
+            {"scene": "PICKUP", "items": [{"sku_id": sku_id, "qty": 1}]},
+        )
+        key = "idem-order-" + stamp
+        _, first = cust.request(
+            "POST",
+            "/api/v1/orders",
+            {"quote_token": quote["quote_token"], "items": [{"sku_id": sku_id, "qty": 1}], "remark": "少辣"},
+            headers={"Idempotency-Key": key},
+        )
+        _, second = cust.request(
+            "POST",
+            "/api/v1/orders",
+            {"quote_token": quote["quote_token"], "items": [{"sku_id": sku_id, "qty": 1}], "remark": "少辣"},
+            headers={"Idempotency-Key": key},
+        )
+        if first.get("id") != second.get("id"):
+            raise Fail({"first": first, "second": second})
+        if first.get("remark") != "少辣":
+            raise Fail(first)
+
+    check("Idempotency-Key returns same order and persists remark", idempotent_preview_order)
 
     print()
     print(f"{len(passed)} passed, {len(failed)} failed")

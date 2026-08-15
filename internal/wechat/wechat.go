@@ -3,6 +3,7 @@ package wechat
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -62,7 +63,7 @@ type QueryResult struct {
 type DevClient struct{ DevMode bool }
 
 func New(cfg config.Config) Client {
-	return DevClient{DevMode: cfg.DevMode}
+	return NewHTTP(cfg.DevMode)
 }
 
 func (c DevClient) Code2Session(_ context.Context, _, _, code string) (string, error) {
@@ -205,12 +206,27 @@ func ParsePublicKey(pemBytes []byte) (*rsa.PublicKey, error) {
 }
 
 func SignSHA256(priv *rsa.PrivateKey, message []byte) (string, error) {
+	if priv == nil {
+		return "", errors.New("missing private key")
+	}
 	sum := sha256.Sum256(message)
-	sig, err := rsa.SignPKCS1v15(rand.Reader, priv, 0, sum[:]) // hash already done; use crypto.SHA256
+	sig, err := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, sum[:])
 	if err != nil {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(sig), nil
+}
+
+func VerifySHA256(pub *rsa.PublicKey, message []byte, sigB64 string) error {
+	if pub == nil {
+		return errors.New("missing public key")
+	}
+	sig, err := base64.StdEncoding.DecodeString(sigB64)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(message)
+	return rsa.VerifyPKCS1v15(pub, crypto.SHA256, sum[:], sig)
 }
 
 func NotifyMessage(ts, nonce, body string) []byte {

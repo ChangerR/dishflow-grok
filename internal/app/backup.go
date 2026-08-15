@@ -184,6 +184,16 @@ func (a *App) HandlePayNotify(ctx context.Context, pathStoreID, eventID, appid, 
 	if amount != payable {
 		return apperr.Validation("金额不符")
 	}
+	var storeApp sql.NullString
+	_ = a.DB.QueryRowContext(ctx, `SELECT wechat_appid FROM stores WHERE id=?`, storeID).Scan(&storeApp)
+	if appid != "" && storeApp.Valid && storeApp.String != "" && appid != storeApp.String {
+		return apperr.Forbidden
+	}
+	var mch sql.NullString
+	_ = a.DB.QueryRowContext(ctx, `SELECT mch_id FROM payment_configs WHERE store_id=?`, storeID).Scan(&mch)
+	if mchid != "" && mch.Valid && mch.String != "" && mchid != mch.String {
+		return apperr.Forbidden
+	}
 	var n int
 	_ = a.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM webhook_events WHERE provider_event_id=?`, eventID).Scan(&n)
 	if n > 0 {

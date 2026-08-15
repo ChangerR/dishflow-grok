@@ -1,6 +1,11 @@
 <view class="page">
   <view class="h">领券中心</view>
-  <view wx:for="{{offers}}" wx:key="id">{{item.name}} <button size="mini" data-id="{{item.id}}" bindtap="claim">领取</button></view>
+  <view wx:for="{{offers}}" wx:key="id">{{item.name}} 满{{item.min_spend_cents / 100}}减{{item.discount_cents / 100}} <button size="mini" data-id="{{item.id}}" bindtap="claim">领取</button></view>
   <view class="h">我的券</view>
-  <view wx:for="{{mine}}" wx:key="id">{{item.name}} {{item.status}}</view>
+  <view>
+    <text data-tab="AVAILABLE" bindtap="switchTab">可使用</text>
+    <text data-tab="USED" bindtap="switchTab">已使用</text>
+    <text data-tab="EXPIRED" bindtap="switchTab">已过期</text>
+  </view>
+  <view wx:for="{{mine}}" wx:key="id">{{item.name}} {{item.status}} 满{{item.min_spend_cents / 100}}减{{item.discount_cents / 100}}</view>
 </view>

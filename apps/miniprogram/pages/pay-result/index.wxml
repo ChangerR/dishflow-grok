@@ -1,5 +1,5 @@
 <view class="page">
-  <view wx:if="{{status==='SUCCESS'}}">支付成功 取餐号 {{pickup_number}} 积分 {{points_awarded}}</view>
+  <view wx:if="{{status==='SUCCESS'}}">支付成功 取餐号 {{pickup_number}} 积分 {{points_awarded}} {{table_no}} {{scheduled_for}}</view>
   <view wx:elif="{{status==='FAILED'}}">支付失败或已关闭</view>
-  <view wx:else>确认中，请稍候…</view>
+  <view wx:else>确认中，请稍候…请以服务端订单状态为准</view>
 </view>

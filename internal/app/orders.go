@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
 	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/changerr/dishflow-grok/internal/apperr"
+	"github.com/changerr/dishflow-grok/internal/cryptoutil"
 	"github.com/changerr/dishflow-grok/internal/domain"
 	"github.com/changerr/dishflow-grok/internal/ids"
 	"github.com/changerr/dishflow-grok/internal/wechat"
@@ -43,6 +45,7 @@ type OrderItemDTO struct {
 	ProductName     string   `json:"product_name"`
 	SKUName         string   `json:"sku_name"`
 	Options         []string `json:"options"`
+	OptionIDs       []string `json:"option_ids"`
 	Qty             int      `json:"qty"`
 	UnitPriceCents  int64    `json:"unit_price_cents"`
 	LineTotalCents  int64    `json:"line_total_cents"`
@@ -107,10 +110,7 @@ func (a *App) GetOrder(ctx context.Context, storeID, orderID, customerID string,
 		if err := rows.Scan(&it.ProductID, &it.SKUID, &it.ProductName, &it.SKUName, &opt, &it.Qty, &it.UnitPriceCents, &it.LineTotalCents); err != nil {
 			return d, err
 		}
-		_ = json.Unmarshal([]byte(opt), &it.Options)
-		if it.Options == nil {
-			it.Options = []string{}
-		}
+		it.Options, it.OptionIDs = parseOptionSnapshot(opt)
 		d.Items = append(d.Items, it)
 	}
 	if d.Items == nil {
@@ -136,6 +136,40 @@ func (a *App) GetOrder(ctx context.Context, storeID, orderID, customerID string,
 	}
 	_ = updated
 	return d, nil
+}
+
+func parseOptionSnapshot(raw string) (names, ids []string) {
+	names, ids = []string{}, []string{}
+	if strings.TrimSpace(raw) == "" {
+		return names, ids
+	}
+	var objs []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal([]byte(raw), &objs); err == nil && len(objs) > 0 {
+		for _, o := range objs {
+			if o.Name != "" {
+				names = append(names, o.Name)
+			} else if o.ID == "" {
+				continue
+			}
+			if o.ID != "" {
+				ids = append(ids, o.ID)
+			}
+		}
+		if len(names) > 0 || len(ids) > 0 {
+			return names, ids
+		}
+	}
+	var strs []string
+	if err := json.Unmarshal([]byte(raw), &strs); err == nil {
+		if strs == nil {
+			strs = []string{}
+		}
+		return strs, ids
+	}
+	return names, ids
 }
 
 func (a *App) ListCustomerOrders(ctx context.Context, storeID, customerID, status string) ([]OrderDTO, error) {
@@ -359,6 +393,16 @@ func (a *App) CancelCustomerOrder(ctx context.Context, storeID, customerID, orde
 	now := a.Now()
 	switch o.Status {
 	case domain.OrderPendingPayment:
+		if !o.IsMock && !a.Cfg.DevMode {
+			if cfg, err := a.payConfig(ctx, storeID); err == nil {
+				q, qerr := a.Wechat.QueryOrder(ctx, cfg, orderID)
+				if qerr == nil && q.TradeState == "SUCCESS" {
+					_ = a.ConfirmPaid(ctx, storeID, orderID, q.TxnID, false)
+					return map[string]any{"status": domain.OrderPaid, "message": "支付已到账"}, nil
+				}
+				_ = a.Wechat.CloseOrder(ctx, cfg, orderID)
+			}
+		}
 		if err := a.closeUnpaid(ctx, storeID, orderID, "CUSTOMER"); err != nil {
 			return nil, err
 		}
@@ -539,12 +583,68 @@ func (a *App) Board(ctx context.Context, storeID, q string) (map[string][]OrderD
 }
 
 func (a *App) payConfig(ctx context.Context, storeID string) (wechat.PayConfig, error) {
-	var appid sql.NullString
-	_ = a.DB.QueryRowContext(ctx, `SELECT wechat_appid FROM stores WHERE id=?`, storeID).Scan(&appid)
-	var mch, serial sql.NullString
-	err := a.DB.QueryRowContext(ctx, `SELECT mch_id, serial_no FROM payment_configs WHERE store_id=? AND status='ready'`, storeID).Scan(&mch, &serial)
+	keys, err := a.PayNotifyKeys(ctx, storeID)
 	if err != nil {
+		return wechat.PayConfig{}, err
+	}
+	if keys.MchID == "" || keys.Serial == "" || keys.PrivateKey == nil {
 		return wechat.PayConfig{}, apperr.PaymentUnavailable
 	}
-	return wechat.PayConfig{AppID: scanNullString(appid), MchID: scanNullString(mch), SerialNo: scanNullString(serial)}, nil
+	return wechat.PayConfig{
+		AppID: keys.AppID, MchID: keys.MchID, SerialNo: keys.Serial, APIKey: keys.APIv3,
+		PrivateKey: keys.PrivateKey, PubKeyID: keys.PubKeyID, PubKey: keys.Pub,
+	}, nil
+}
+
+type PayKeys struct {
+	AppID      string
+	MchID      string
+	Serial     string
+	PubKeyID   string
+	APIv3      string
+	PrivateKey *rsa.PrivateKey
+	Pub        *rsa.PublicKey
+}
+
+func (a *App) PayNotifyKeys(ctx context.Context, storeID string) (PayKeys, error) {
+	var k PayKeys
+	var appid sql.NullString
+	_ = a.DB.QueryRowContext(ctx, `SELECT wechat_appid FROM stores WHERE id=?`, storeID).Scan(&appid)
+	k.AppID = scanNullString(appid)
+	var mch, serial, apiEnc, privEnc, pubid, pubEnc, platEnc sql.NullString
+	err := a.DB.QueryRowContext(ctx, `SELECT mch_id, serial_no, api_v3_key_enc, private_key_enc, pub_key_id, pub_key_pem_enc, platform_cert_enc FROM payment_configs WHERE store_id=?`, storeID).
+		Scan(&mch, &serial, &apiEnc, &privEnc, &pubid, &pubEnc, &platEnc)
+	if err == sql.ErrNoRows {
+		return k, apperr.PaymentUnavailable
+	}
+	if err != nil {
+		return k, err
+	}
+	k.MchID = scanNullString(mch)
+	k.Serial = scanNullString(serial)
+	k.PubKeyID = scanNullString(pubid)
+	if apiEnc.Valid && apiEnc.String != "" {
+		if b, err := cryptoutil.Decrypt(a.Cfg.CredentialKey, apiEnc.String); err == nil {
+			k.APIv3 = string(b)
+		}
+	}
+	if privEnc.Valid && privEnc.String != "" {
+		if b, err := cryptoutil.Decrypt(a.Cfg.CredentialKey, privEnc.String); err == nil {
+			k.PrivateKey, _ = wechat.ParsePrivateKey(b)
+		}
+	}
+	pemBytes := []byte{}
+	if pubEnc.Valid && pubEnc.String != "" {
+		if b, err := cryptoutil.Decrypt(a.Cfg.CredentialKey, pubEnc.String); err == nil {
+			pemBytes = b
+		}
+	} else if platEnc.Valid && platEnc.String != "" {
+		if b, err := cryptoutil.Decrypt(a.Cfg.CredentialKey, platEnc.String); err == nil {
+			pemBytes = b
+		}
+	}
+	if len(pemBytes) > 0 {
+		k.Pub, _ = wechat.ParsePublicKey(pemBytes)
+	}
+	return k, nil
 }

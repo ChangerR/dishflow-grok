@@ -319,7 +319,7 @@ func (a *App) loadCustomerCoupon(ctx context.Context, storeID, customerID, coupo
 	return &c, "", nil
 }
 
-func (a *App) CreateOrder(ctx context.Context, storeID, customerID, quoteToken string, items []domain.CartItem) (OrderDTO, error) {
+func (a *App) CreateOrder(ctx context.Context, storeID, customerID, quoteToken string, items []domain.CartItem, remark string) (OrderDTO, error) {
 	if customerID == "" {
 		return OrderDTO{}, apperr.Unauthorized
 	}
@@ -368,11 +368,11 @@ func (a *App) CreateOrder(ctx context.Context, storeID, customerID, quoteToken s
 				return err
 			}
 		}
-		_, err = tx.Exec(`INSERT INTO orders (id, store_id, customer_id, quote_id, scene, status, payment_status, table_id, table_no, pickup_type, scheduled_for, pickup_business_date, pickup_number, goods_cents, packing_cents, discount_cents, payable_cents, applied_promotion_id, applied_coupon_id, version, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+		_, err = tx.Exec(`INSERT INTO orders (id, store_id, customer_id, quote_id, scene, status, payment_status, table_id, table_no, pickup_type, scheduled_for, pickup_business_date, pickup_number, goods_cents, packing_cents, discount_cents, payable_cents, applied_promotion_id, applied_coupon_id, remark, version, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
 			orderID, storeID, customerID, q.ID, q.Scene, domain.OrderPendingPayment, domain.PayUnpaid,
 			nullS(q.TableID), nullS(q.TableNo), q.PickupType, q.ScheduledFor, q.PickupBusinessDay, pickupNo,
-			q.GoodsCents, q.PackingCents, q.DiscountCents, q.PayableCents, nullS(q.PromotionID), nullS(q.CouponID), now, now)
+			q.GoodsCents, q.PackingCents, q.DiscountCents, q.PayableCents, nullS(q.PromotionID), nullS(q.CouponID), nullS(clip(remark, 100)), now, now)
 		if err != nil {
 			if isDup(err) {
 				return apperr.Conflict
@@ -380,7 +380,7 @@ func (a *App) CreateOrder(ctx context.Context, storeID, customerID, quoteToken s
 			return err
 		}
 		for _, line := range q.Lines {
-			opt, _ := json.Marshal(line.OptionNames)
+			opt, _ := json.Marshal(optionSnapshot(line.OptionIDs, line.OptionNames))
 			if _, err := tx.Exec(`INSERT INTO order_items (id, order_id, store_id, product_id, sku_id, product_name, sku_name, options_json, qty, unit_price_cents, packing_fee_cents, line_total_cents)
 				VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, a.NewID(), orderID, storeID, line.ProductID, line.SKUID, line.ProductName, line.SKUName, string(opt), line.Qty, line.UnitPriceCents, line.PackingCents, line.LineTotalCents); err != nil {
 				return err
@@ -403,6 +403,25 @@ func (a *App) CreateOrder(ctx context.Context, storeID, customerID, quoteToken s
 		_ = a.Redis.Del(ctx, "quote:"+quoteToken).Err()
 	}
 	return a.GetOrder(ctx, storeID, orderID, customerID, true)
+}
+
+func optionSnapshot(ids, names []string) []map[string]string {
+	n := len(names)
+	if len(ids) > n {
+		n = len(ids)
+	}
+	out := make([]map[string]string, 0, n)
+	for i := 0; i < n; i++ {
+		row := map[string]string{}
+		if i < len(ids) {
+			row["id"] = ids[i]
+		}
+		if i < len(names) {
+			row["name"] = names[i]
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 func occupySlot(tx *sql.Tx, storeID string, start time.Time, capacity int) error {

@@ -255,6 +255,7 @@ func (a *App) RetryException(ctx context.Context, storeID, id string) error {
 func (a *App) AdminListOrders(ctx context.Context, storeID, cursor string, statuses []string, scene, pay, q string, start, end string) (map[string]any, error) {
 	query := `SELECT id FROM orders WHERE store_id=?`
 	args := []any{storeID}
+	statuses = cleanList(statuses)
 	if len(statuses) > 0 {
 		query += ` AND status IN (` + placeholders(len(statuses)) + `)`
 		for _, s := range statuses {
@@ -314,6 +315,17 @@ func (a *App) AdminListOrders(ctx context.Context, storeID, cursor string, statu
 		items = append(items, o)
 	}
 	return map[string]any{"items": items, "next_cursor": next}, nil
+}
+
+func cleanList(ss []string) []string {
+	var out []string
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func placeholders(n int) string {
