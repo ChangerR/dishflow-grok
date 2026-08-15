@@ -176,6 +176,20 @@ func scanNullString(ns sql.NullString) string {
 	return ""
 }
 
+// bizDate normalizes a MySQL DATE scanned with parseTime=true (RFC3339) back to YYYY-MM-DD.
+func bizDate(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 10 && s[4] == '-' && s[7] == '-' {
+		return s[:10]
+	}
+	for _, layout := range []string{time.RFC3339, time.RFC3339Nano, "2006-01-02 15:04:05"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC().Format("2006-01-02")
+		}
+	}
+	return s
+}
+
 func requireRole(role string, need string) error {
 	if !domain.RoleAtLeast(role, need) {
 		return apperr.Forbidden

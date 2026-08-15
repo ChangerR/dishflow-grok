@@ -157,8 +157,39 @@ func (a *App) AnalyticsCustomers(ctx context.Context, storeID string) (map[strin
 	}, nil
 }
 
-func (a *App) ExportOrdersCSV(ctx context.Context, storeID string) (string, error) {
-	rows, err := a.DB.QueryContext(ctx, `SELECT id, pickup_number, scene, pickup_type, scheduled_for, status, payment_status, payable_cents, created_at FROM orders WHERE store_id=? ORDER BY created_at DESC LIMIT 5000`, storeID)
+func (a *App) ExportOrdersCSV(ctx context.Context, storeID string, statuses []string, scene, pay, q, start, end string) (string, error) {
+	query := `SELECT id, pickup_number, scene, pickup_type, scheduled_for, status, payment_status, payable_cents, created_at FROM orders WHERE store_id=?`
+	args := []any{storeID}
+	statuses = cleanList(statuses)
+	if len(statuses) > 0 {
+		query += ` AND status IN (` + placeholders(len(statuses)) + `)`
+		for _, s := range statuses {
+			args = append(args, s)
+		}
+	}
+	if scene != "" {
+		query += ` AND scene=?`
+		args = append(args, scene)
+	}
+	if pay != "" {
+		query += ` AND payment_status=?`
+		args = append(args, pay)
+	}
+	if q != "" {
+		query += ` AND (id LIKE ? OR pickup_number LIKE ? OR table_no LIKE ?)`
+		like := "%" + q + "%"
+		args = append(args, like, like, like)
+	}
+	if start != "" {
+		query += ` AND created_at>=?`
+		args = append(args, start)
+	}
+	if end != "" {
+		query += ` AND created_at<=?`
+		args = append(args, end)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 5000`
+	rows, err := a.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return "", err
 	}

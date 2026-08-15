@@ -1,9 +1,12 @@
+import { newIdempotencyKey } from "./pay";
+
 const APPID = ""; // 构建时注入门店 AppID
 
 export async function request<T>(path: string, method: string, data?: unknown, auth = false): Promise<T> {
   const app = getApp<{ globalData: { token: string } }>();
   const header: Record<string, string> = { "X-Wechat-Appid": APPID || wx.getAccountInfoSync().miniProgram.appId };
   if (auth && app.globalData.token) header.Authorization = `Bearer ${app.globalData.token}`;
+  if (method !== "GET" && method !== "HEAD") header["Idempotency-Key"] = newIdempotencyKey();
   return new Promise((resolve, reject) => {
     wx.request({
       url: path.startsWith("http") ? path : path,

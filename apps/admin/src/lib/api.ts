@@ -15,6 +15,10 @@ async function request<T>(path: string, init: RequestInit = {}, storeId?: string
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (storeId) headers.set("X-Store-Id", storeId);
+  const method = (init.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && !headers.has("Idempotency-Key")) {
+    headers.set("Idempotency-Key", crypto.randomUUID());
+  }
   const res = await fetch(path, { ...init, headers, credentials: "include" });
   if (res.status === 401) {
     if (!path.includes("/admin/session") || init.method !== "POST") {

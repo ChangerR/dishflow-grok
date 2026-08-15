@@ -30,6 +30,8 @@ func runOnce(ctx context.Context, a *app.App) {
 		_ = a.Redis.Set(ctx, "worker:heartbeat", a.Now().UTC().Format(time.RFC3339), 45*time.Second).Err()
 	}
 	_ = a.ReleaseExpiredHolds(ctx)
+	_ = a.ReconcilePayments(ctx)
+	_ = a.ReconcileRefunds(ctx)
 	_ = a.DispatchOutbox(ctx)
 	_ = a.ProcessPrintJobs(ctx)
 }

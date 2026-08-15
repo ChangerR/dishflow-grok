@@ -1,13 +1,30 @@
 <view class="page">
   <view class="head">{{storeName}} {{isOpen ? '营业中' : '休息中'}} {{scene === 'DINE_IN' ? '堂食' : '自取'}} {{tableNo}}</view>
   <view wx:if="{{announcement}}">{{announcement}}</view>
-  <input placeholder="搜索菜品" bindinput="onKeyword" />
-  <view wx:for="{{categories}}" wx:key="id">
+  <input placeholder="搜索菜品、口味" bindinput="onKeyword" value="{{keyword}}" />
+  <view wx:for="{{shown}}" wx:key="id">
     <view class="cat">{{item.name}}</view>
     <view wx:for="{{item.dishes}}" wx:for-item="dish" wx:key="id" class="dish">
-      <text>{{dish.name}} 起 ¥{{dish.from_price_cents / 100}}</text>
-      <button size="mini" data-sku="{{dish.skus[0].id}}" bindtap="add">加入</button>
+      <view>
+        <view>{{dish.name}} 起 ¥{{dish.from_price_cents / 100}}</view>
+        <view class="desc">{{dish.description}} {{dish.sold_out ? '售罄' : ''}} {{dish.option_count ? '可加料' : ''}}</view>
+      </view>
+      <button size="mini" disabled="{{dish.sold_out}}" data-dish="{{dish}}" bindtap="openPicker">选规格</button>
     </view>
   </view>
   <button bindtap="checkout">去结算 {{cart.length}}</button>
+  <view class="mask" wx:if="{{picker}}" catchtap="closePicker">
+    <view class="sheet" catchtap="">
+      <view class="cat">{{picker.dish.name}}</view>
+      <view wx:for="{{picker.dish.skus}}" wx:key="id">
+        <button size="mini" type="{{item.id === picker.skuId ? 'primary' : 'default'}}" disabled="{{!item.enabled}}" data-id="{{item.id}}" bindtap="pickSku">{{item.name}} ¥{{item.price_cents / 100}} {{item.remaining != null ? '余'+item.remaining : ''}}</button>
+      </view>
+      <view wx:for="{{picker.dish.option_groups}}" wx:for-item="g" wx:key="id">
+        <view>{{g.name}} {{g.required ? '必选' : '可选'}}</view>
+        <button wx:for="{{g.items}}" wx:for-item="opt" wx:key="id" size="mini" data-gid="{{g.id}}" data-oid="{{opt.id}}" bindtap="pickOption">{{opt.name}} +{{opt.price_cents / 100}}</button>
+      </view>
+      <button bindtap="confirmAdd">加入购物车</button>
+      <button bindtap="closePicker">取消</button>
+    </view>
+  </view>
 </view>

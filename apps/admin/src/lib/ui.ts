@@ -58,3 +58,17 @@ export function nextTransition(status: string): string | null {
 export function transitionLabel(to: string): string {
   return ({ ACCEPTED: "接单", PREPARING: "开始制作", READY: "出餐", COMPLETED: "完成" } as Record<string, string>)[to] ?? to;
 }
+
+export function isOverdue(anchorISO: string | undefined, pickupMinutes: number, nowMs = Date.now()): boolean {
+  if (!anchorISO || pickupMinutes <= 0) return false;
+  const t = Date.parse(anchorISO);
+  if (Number.isNaN(t)) return false;
+  return nowMs - t > pickupMinutes * 60_000;
+}
+
+export function toRFC3339(local: string): string {
+  if (!local) return "";
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return local;
+  return d.toISOString();
+}

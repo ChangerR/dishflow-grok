@@ -67,7 +67,8 @@ func (s *Server) platformStores(w http.ResponseWriter, r *http.Request, p app.Ad
 }
 func (s *Server) createPlatformStore(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal) {
 	var body struct {
-		Name, Timezone string
+		Name     string `json:"name"`
+		Timezone string `json:"timezone"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.CreatePlatformStore(r.Context(), body.Name, body.Timezone)
@@ -101,8 +102,11 @@ func (s *Server) platformUsers(w http.ResponseWriter, r *http.Request, p app.Adm
 }
 func (s *Server) createPlatformUser(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal) {
 	var body struct {
-		LoginName, DisplayName, Password string
-		IsPlatformAdmin, Enabled         bool
+		LoginName       string `json:"login_name"`
+		DisplayName     string `json:"display_name"`
+		Password        string `json:"password"`
+		IsPlatformAdmin bool   `json:"is_platform_admin"`
+		Enabled         bool   `json:"enabled"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if !body.Enabled {
@@ -149,7 +153,10 @@ func (s *Server) listShopApps(w http.ResponseWriter, r *http.Request, p app.Admi
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) reviewShopApp(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal) {
-	var body struct{ Decision, Note string }
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.ReviewShopApplication(r.Context(), p.UserID, chi.URLParam(r, "id"), body.Decision, body.Note)
 	if err != nil {
@@ -185,7 +192,8 @@ func (s *Server) adminOrder(w http.ResponseWriter, r *http.Request, p app.AdminP
 	writeJSON(w, 200, d)
 }
 func (s *Server) exportOrders(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	csv, err := s.App.ExportOrdersCSV(r.Context(), storeID)
+	q := r.URL.Query()
+	csv, err := s.App.ExportOrdersCSV(r.Context(), storeID, strings.Split(q.Get("status"), ","), q.Get("scene"), q.Get("payment_status"), q.Get("q"), q.Get("start"), q.Get("end"))
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -208,7 +216,9 @@ func (s *Server) transition(w http.ResponseWriter, r *http.Request, p app.AdminP
 	writeJSON(w, 200, d)
 }
 func (s *Server) storeRefund(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Reason string }
+	var body struct {
+		Reason string `json:"reason"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.App.StoreRefund(r.Context(), storeID, p.UserID, chi.URLParam(r, "id"), body.Reason); err != nil {
 		writeErr(w, r, err)
@@ -232,7 +242,10 @@ func (s *Server) refunds(w http.ResponseWriter, r *http.Request, p app.AdminPrin
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) reviewRefund(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Decision, Note string }
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.App.ReviewCancelRefund(r.Context(), storeID, p.UserID, chi.URLParam(r, "id"), body.Decision, body.Note); err != nil {
 		writeErr(w, r, err)
@@ -563,7 +576,9 @@ func (s *Server) delTpl(w http.ResponseWriter, r *http.Request, p app.AdminPrinc
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 func (s *Server) issueTpl(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Audience string }
+	var body struct {
+		Audience string `json:"audience"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.IssueCoupons(r.Context(), storeID, chi.URLParam(r, "id"), body.Audience)
 	if err != nil {
@@ -743,7 +758,9 @@ func (s *Server) shopMembers(w http.ResponseWriter, r *http.Request, p app.Admin
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) changeRole(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Role string }
+	var body struct {
+		Role string `json:"role"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	if err := s.App.ChangeMemberRole(r.Context(), storeID, p.Role, chi.URLParam(r, "adminUserId"), body.Role); err != nil {
 		writeErr(w, r, err)
@@ -767,7 +784,10 @@ func (s *Server) joinReqs(w http.ResponseWriter, r *http.Request, p app.AdminPri
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) reviewJoin(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Decision, Note string }
+	var body struct {
+		Decision string `json:"decision"`
+		Note     string `json:"note"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.ReviewJoinRequest(r.Context(), p, chi.URLParam(r, "id"), body.Decision, body.Note)
 	if err != nil {
@@ -821,7 +841,9 @@ func (s *Server) listPurchases(w http.ResponseWriter, r *http.Request, p app.Adm
 	writeJSON(w, 200, map[string]any{"items": d})
 }
 func (s *Server) createPurchase(w http.ResponseWriter, r *http.Request, p app.AdminPrincipal, storeID string) {
-	var body struct{ Title string }
+	var body struct {
+		Title string `json:"title"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	d, err := s.App.CreatePurchaseList(r.Context(), storeID, p.UserID, body.Title)
 	if err != nil {
@@ -996,8 +1018,108 @@ func (s *Server) printJobs(w http.ResponseWriter, r *http.Request, p app.AdminPr
 func (s *Server) payNotify(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	ts := r.Header.Get("Wechatpay-Timestamp")
+	nonce := r.Header.Get("Wechatpay-Nonce")
+	sig := r.Header.Get("Wechatpay-Signature")
+	serial := r.Header.Get("Wechatpay-Serial")
+	storeID := chi.URLParam(r, "storeID")
+	if ts == "" || !wechat.VerifyTimestamp(ts, time.Now().UTC(), 5*time.Minute) {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "timestamp"})
+		return
+	}
+	keys, err := s.App.PayNotifyKeys(r.Context(), storeID)
+	if err != nil && !s.App.Cfg.DevMode {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "keys"})
+		return
+	}
+	if keys.Pub != nil {
+		if err := wechat.VerifySHA256(keys.Pub, wechat.NotifyMessage(ts, nonce, string(body)), sig); err != nil {
+			writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "signature"})
+			return
+		}
+		if keys.Serial != "" && serial != "" && keys.Serial != serial && keys.PubKeyID != serial {
+			writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "serial"})
+			return
+		}
+	} else if !s.App.Cfg.DevMode {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "missing verify key"})
+		return
+	}
+	eventID, appid, mchid, orderID, txnID, amount, currency, trade, err := parsePayNotify(body, keys.APIv3)
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "decrypt"})
+		return
+	}
+	if currency != "" && currency != "CNY" {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "currency"})
+		return
+	}
+	if trade != "" && trade != "SUCCESS" {
+		writeJSON(w, 200, map[string]any{"code": "SUCCESS"})
+		return
+	}
+	if err := s.App.HandlePayNotify(r.Context(), storeID, eventID, appid, mchid, orderID, txnID, amount); err != nil {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"code": "SUCCESS"})
+}
+
+func parsePayNotify(body []byte, apiV3 string) (eventID, appid, mchid, orderID, txnID string, amount int64, currency, trade string, err error) {
+	var env struct {
+		ID       string `json:"id"`
+		Resource struct {
+			Ciphertext     string `json:"ciphertext"`
+			Nonce          string `json:"nonce"`
+			AssociatedData string `json:"associated_data"`
+		} `json:"resource"`
+	}
+	_ = json.Unmarshal(body, &env)
+	plain := body
+	if env.Resource.Ciphertext != "" && apiV3 != "" {
+		plain, err = wechat.DecryptNotify(apiV3, env.Resource.Nonce, env.Resource.Ciphertext, env.Resource.AssociatedData)
+		if err != nil {
+			return
+		}
+	}
+	var tx struct {
+		Appid         string `json:"appid"`
+		Mchid         string `json:"mchid"`
+		OutTradeNo    string `json:"out_trade_no"`
+		TransactionID string `json:"transaction_id"`
+		TradeState    string `json:"trade_state"`
+		Amount        struct {
+			Total    int64  `json:"total"`
+			Currency string `json:"currency"`
+		} `json:"amount"`
+	}
+	if err = json.Unmarshal(plain, &tx); err != nil {
+		return
+	}
+	eventID = env.ID
+	if eventID == "" {
+		eventID = tx.TransactionID
+	}
+	return eventID, tx.Appid, tx.Mchid, tx.OutTradeNo, tx.TransactionID, tx.Amount.Total, tx.Amount.Currency, tx.TradeState, nil
+}
+
+func (s *Server) refundNotify(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	ts := r.Header.Get("Wechatpay-Timestamp")
+	nonce := r.Header.Get("Wechatpay-Nonce")
+	sig := r.Header.Get("Wechatpay-Signature")
+	storeID := chi.URLParam(r, "storeID")
 	if ts != "" && !wechat.VerifyTimestamp(ts, time.Now().UTC(), 5*time.Minute) {
 		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "timestamp"})
+		return
+	}
+	keys, _ := s.App.PayNotifyKeys(r.Context(), storeID)
+	if keys.Pub != nil && sig != "" {
+		if err := wechat.VerifySHA256(keys.Pub, wechat.NotifyMessage(ts, nonce, string(body)), sig); err != nil {
+			writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "signature"})
+			return
+		}
+	} else if !s.App.Cfg.DevMode {
+		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "missing verify key"})
 		return
 	}
 	var env struct {
@@ -1007,60 +1129,25 @@ func (s *Server) payNotify(w http.ResponseWriter, r *http.Request) {
 			Nonce          string `json:"nonce"`
 			AssociatedData string `json:"associated_data"`
 		} `json:"resource"`
-		Summary struct {
-			OutTradeNo    string `json:"out_trade_no"`
-			TransactionID string `json:"transaction_id"`
-			Amount        struct {
-				Total    int64  `json:"total"`
-				Currency string `json:"currency"`
-			} `json:"amount"`
-			Appid      string `json:"appid"`
-			Mchid      string `json:"mchid"`
-			TradeState string `json:"trade_state"`
-		} `json:"event"`
+		OutTradeNo  string `json:"out_trade_no"`
+		OutRefundNo string `json:"out_refund_no"`
+		RefundID    string `json:"refund_id"`
+		Amount      struct {
+			Refund int64 `json:"refund"`
+		} `json:"amount"`
 	}
 	_ = json.Unmarshal(body, &env)
-	storeID := chi.URLParam(r, "storeID")
-	orderID := env.Summary.OutTradeNo
-	if orderID == "" {
-		var alt map[string]any
-		_ = json.Unmarshal(body, &alt)
-		if v, ok := alt["out_trade_no"].(string); ok {
-			orderID = v
+	plain := body
+	if env.Resource.Ciphertext != "" && keys.APIv3 != "" {
+		b, err := wechat.DecryptNotify(keys.APIv3, env.Resource.Nonce, env.Resource.Ciphertext, env.Resource.AssociatedData)
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"code": "FAIL", "message": "decrypt"})
+			return
 		}
-		if v, ok := alt["transaction_id"].(string); ok {
-			env.Summary.TransactionID = v
-		}
-		if amt, ok := alt["amount"].(map[string]any); ok {
-			if t, ok := amt["total"].(float64); ok {
-				env.Summary.Amount.Total = int64(t)
-			}
-		}
-		if v, ok := alt["id"].(string); ok {
-			env.ID = v
-		}
+		plain = b
+		_ = json.Unmarshal(plain, &env)
 	}
-	if env.ID == "" {
-		env.ID = env.Summary.TransactionID
-	}
-	if err := s.App.HandlePayNotify(r.Context(), storeID, env.ID, env.Summary.Appid, env.Summary.Mchid, orderID, env.Summary.TransactionID, env.Summary.Amount.Total); err != nil {
-		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": err.Error()})
-		return
-	}
-	writeJSON(w, 200, map[string]any{"code": "SUCCESS"})
-}
-
-func (s *Server) refundNotify(w http.ResponseWriter, r *http.Request) {
-	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	var env struct {
-		ID           string `json:"id"`
-		OutTradeNo   string `json:"out_trade_no"`
-		OutRefundNo  string `json:"out_refund_no"`
-		RefundID     string `json:"refund_id"`
-		Amount       struct{ Refund int64 `json:"refund"` } `json:"amount"`
-	}
-	_ = json.Unmarshal(body, &env)
-	if err := s.App.HandleRefundNotify(r.Context(), chi.URLParam(r, "storeID"), env.ID, env.OutTradeNo, env.OutRefundNo, env.RefundID, env.Amount.Refund); err != nil {
+	if err := s.App.HandleRefundNotify(r.Context(), storeID, env.ID, env.OutTradeNo, env.OutRefundNo, env.RefundID, env.Amount.Refund); err != nil {
 		writeJSON(w, 400, map[string]any{"code": "FAIL", "message": err.Error()})
 		return
 	}

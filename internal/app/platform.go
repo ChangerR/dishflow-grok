@@ -319,19 +319,36 @@ func (a *App) ReviewShopApplication(ctx context.Context, reviewerID, id, decisio
 		return d, apperr.Validation("decision 必须为 APPROVED 或 REJECTED")
 	}
 	err = persistTx(ctx, a, func(tx *sql.Tx) error {
-		store, err := a.CreatePlatformStore(ctx, d.StoreName, "Asia/Shanghai")
-		if err != nil {
+		storeID := a.NewID()
+		now := a.Now()
+		if _, err := tx.Exec(`INSERT INTO stores (id, name, timezone, created_at, updated_at) VALUES (?,?,?,?,?)`, storeID, d.StoreName, "Asia/Shanghai", now, now); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE shop_members SET role=? WHERE store_id=? AND role=?`, domain.RoleManager, store.ID, domain.RoleOwner); err != nil {
+		if _, err := tx.Exec(`INSERT INTO member_settings (store_id, points_per_yuan, updated_at) VALUES (?,?,?)`, storeID, 1, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO payment_configs (store_id, status, updated_at) VALUES (?,?,?)`, storeID, "draft", now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO print_configs (store_id, status, updated_at) VALUES (?,?,?)`, storeID, "draft", now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE shop_members SET role=? WHERE store_id=? AND role=?`, domain.RoleManager, storeID, domain.RoleOwner); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`INSERT INTO shop_members (store_id, admin_user_id, role, created_at) VALUES (?,?,?,?)
-			ON DUPLICATE KEY UPDATE role=VALUES(role)`, store.ID, d.ApplicantID, domain.RoleOwner, now); err != nil {
+			ON DUPLICATE KEY UPDATE role=VALUES(role)`, storeID, d.ApplicantID, domain.RoleOwner, now); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`UPDATE shop_applications SET status='APPROVED', note=?, reviewed_at=?, reviewer_id=? WHERE id=? AND status='PENDING'`, note, now, reviewerID, id)
-		return err
+		res, err := tx.Exec(`UPDATE shop_applications SET status='APPROVED', note=?, reviewed_at=?, reviewer_id=? WHERE id=? AND status='PENDING'`, note, now, reviewerID, id)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return apperr.StateConflict
+		}
+		return nil
 	})
 	if err != nil {
 		return d, err

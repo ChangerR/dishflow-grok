@@ -184,10 +184,21 @@ func (a *App) CloudPrintOrder(ctx context.Context, storeID, orderID string, repr
 		return err
 	}
 	store, _ := a.PublicStore(ctx, storeID)
+	items := make([]print.TicketItem, 0, len(o.Items))
+	for _, it := range o.Items {
+		name := it.ProductName
+		if it.SKUName != "" {
+			name += " " + it.SKUName
+		}
+		if len(it.Options) > 0 {
+			name += " " + strings.Join(it.Options, "/")
+		}
+		items = append(items, print.TicketItem{Name: name, Qty: it.Qty})
+	}
 	content := print.RenderOrder(print.Ticket{
 		StoreName: store.Name, PickupNumber: o.PickupNumber, TableNo: o.TableNo,
 		PickupType: o.PickupType, ScheduledFor: strPtr(o.ScheduledFor), Remark: o.Remark,
-		PayableCents: o.PayableCents, IsMock: o.IsMock,
+		Items: items, PayableCents: o.PayableCents, IsMock: o.IsMock,
 	})
 	typ := "order"
 	if reprint {
@@ -255,38 +266,82 @@ func (a *App) ListPrintJobs(ctx context.Context, storeID string) ([]map[string]a
 }
 
 func (a *App) ProcessPrintJobs(ctx context.Context) error {
-	rows, err := a.DB.QueryContext(ctx, `SELECT id, store_id, type, order_id, content FROM cloud_print_jobs WHERE status IN ('QUEUED','SENDING') ORDER BY created_at LIMIT 20`)
+	rows, err := a.DB.QueryContext(ctx, `SELECT id, store_id, type, order_id, content, status, shangpeng_id FROM cloud_print_jobs WHERE status IN ('QUEUED','SENDING','SUBMITTED') ORDER BY created_at LIMIT 20`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	type job struct{ id, store, typ, oid, content string }
+	type job struct{ id, store, typ, oid, content, status, spid string }
 	var jobs []job
 	for rows.Next() {
 		var j job
-		var oid sql.NullString
-		if err := rows.Scan(&j.id, &j.store, &j.typ, &oid, &j.content); err != nil {
+		var oid, sp sql.NullString
+		if err := rows.Scan(&j.id, &j.store, &j.typ, &oid, &j.content, &j.status, &sp); err != nil {
 			return err
 		}
 		j.oid = scanNullString(oid)
+		j.spid = scanNullString(sp)
 		jobs = append(jobs, j)
 	}
+	cli := print.ShangpengClient{}
 	for _, j := range jobs {
 		var mock bool
-		_ = a.DB.QueryRowContext(ctx, `SELECT COALESCE(mock_print,0) FROM print_configs WHERE store_id=?`, j.store).Scan(&mock)
+		var appid, secretEnc sql.NullString
+		_ = a.DB.QueryRowContext(ctx, `SELECT COALESCE(mock_print,0), appid, appsecret_enc FROM print_configs WHERE store_id=?`, j.store).Scan(&mock, &appid, &secretEnc)
 		now := a.Now()
-		_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, attempts=attempts+1, updated_at=? WHERE id=?`, domain.PrintSubmitted, now, j.id)
-		_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, updated_at=? WHERE id=?`, domain.PrintPrinted, now, j.id)
-		if j.typ == "order" && j.oid != "" {
-			var st string
-			_ = a.DB.QueryRowContext(ctx, `SELECT status FROM orders WHERE id=?`, j.oid).Scan(&st)
-			if st == domain.OrderPaid {
-				_, _ = a.TransitionOrder(ctx, j.store, "", j.oid, domain.OrderAccepted, 1)
+		if mock || a.Cfg.DevMode {
+			_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, attempts=attempts+1, updated_at=? WHERE id=?`, domain.PrintPrinted, now, j.id)
+			a.maybeAcceptPrintedOrder(ctx, j.store, j.typ, j.oid)
+			continue
+		}
+		secret := ""
+		if secretEnc.Valid {
+			if b, err := cryptoutil.Decrypt(a.Cfg.CredentialKey, secretEnc.String); err == nil {
+				secret = string(b)
 			}
 		}
-		_ = mock
+		var sn, keyEnc sql.NullString
+		var copies int
+		_ = a.DB.QueryRowContext(ctx, `SELECT sn, key_enc, copies FROM cloud_printers WHERE store_id=? AND enabled=1 ORDER BY is_default DESC LIMIT 1`, j.store).Scan(&sn, &keyEnc, &copies)
+		key := ""
+		if keyEnc.Valid {
+			if b, err := cryptoutil.Decrypt(a.Cfg.CredentialKey, keyEnc.String); err == nil {
+				key = string(b)
+			}
+		}
+		cfg := print.ShangpengConfig{AppID: scanNullString(appid), AppSecret: secret, SN: scanNullString(sn), Key: key, Copies: copies}
+		if j.status == domain.PrintSubmitted && j.spid != "" {
+			st, err := cli.Query(ctx, cfg, j.spid)
+			if err != nil {
+				_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET error_message=?, attempts=attempts+1, updated_at=? WHERE id=?`, err.Error(), now, j.id)
+				continue
+			}
+			if strings.EqualFold(st, "PRINTED") || strings.EqualFold(st, "SUCCESS") {
+				_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, updated_at=? WHERE id=?`, domain.PrintPrinted, now, j.id)
+				a.maybeAcceptPrintedOrder(ctx, j.store, j.typ, j.oid)
+			}
+			continue
+		}
+		_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, attempts=attempts+1, updated_at=? WHERE id=?`, domain.PrintSending, now, j.id)
+		spid, err := cli.Print(ctx, cfg, j.content, j.id)
+		if err != nil {
+			_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, error_message=?, updated_at=? WHERE id=?`, domain.PrintFailed, err.Error(), now, j.id)
+			continue
+		}
+		_, _ = a.DB.ExecContext(ctx, `UPDATE cloud_print_jobs SET status=?, shangpeng_id=?, updated_at=? WHERE id=?`, domain.PrintSubmitted, spid, now, j.id)
 	}
 	return nil
+}
+
+func (a *App) maybeAcceptPrintedOrder(ctx context.Context, storeID, typ, orderID string) {
+	if typ != "order" || orderID == "" {
+		return
+	}
+	o, err := a.GetOrder(ctx, storeID, orderID, "", false)
+	if err != nil || o.Status != domain.OrderPaid {
+		return
+	}
+	_, _ = a.TransitionOrder(ctx, storeID, "", orderID, domain.OrderAccepted, o.Version)
 }
 
 func (a *App) DispatchOutbox(ctx context.Context) error {
@@ -302,9 +357,13 @@ func (a *App) DispatchOutbox(ctx context.Context) error {
 			return err
 		}
 		if et == "order.paid" {
-			var m map[string]string
-			_ = jsonUnmarshal(payload, &m)
-			_ = a.CloudPrintOrder(ctx, store, m["order_id"], false)
+			var auto bool
+			_ = a.DB.QueryRowContext(ctx, `SELECT COALESCE(auto_print,0) FROM print_configs WHERE store_id=?`, store).Scan(&auto)
+			if auto {
+				var m map[string]string
+				_ = jsonUnmarshal(payload, &m)
+				_ = a.CloudPrintOrder(ctx, store, m["order_id"], false)
+			}
 		}
 		_, _ = a.DB.ExecContext(ctx, `UPDATE outbox SET published_at=? WHERE id=?`, now, id)
 	}

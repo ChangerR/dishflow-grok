@@ -1,6 +1,12 @@
 <view class="page">
   <view wx:if="{{me.is_member}}">会员 {{me.member_no}} 积分 {{me.points_balance}}</view>
-  <button wx:else bindtap="join">同意协议并入会</button>
+  <block wx:else>
+    <checkbox-group bindchange="toggleAgree">
+      <label><checkbox value="yes" /> 同意会员协议与隐私政策</label>
+    </checkbox-group>
+    <button open-type="getPhoneNumber" bindgetphonenumber="onPhone" disabled="{{!agreed || joining}}">微信手机号入会</button>
+  </block>
+  <button bindtap="goOrders">我的订单</button>
   <button bindtap="goCoupons">优惠券</button>
   <button bindtap="goStore">门店信息</button>
 </view>

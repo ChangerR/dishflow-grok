@@ -1,9 +1,19 @@
 <view class="page">
-  <button bindtap="loadSlots">预约取餐</button>
-  <view wx:for="{{slots}}" wx:key="starts_at">
-    <button disabled="{{!item.available}}" data-at="{{item.starts_at}}" bindtap="chooseSlot">{{item.label}} 余{{item.remaining}}</button>
+  <view>{{scene === 'DINE_IN' ? '堂食' : '自取'}}</view>
+  <block wx:if="{{scene !== 'DINE_IN'}}">
+    <button bindtap="immediate">尽快取餐</button>
+    <button bindtap="loadSlots">预约取餐</button>
+    <view wx:for="{{slots}}" wx:key="starts_at">
+      <button disabled="{{!item.available}}" data-at="{{item.starts_at}}" bindtap="chooseSlot">{{item.label}} 余{{item.remaining}}</button>
+    </view>
+  </block>
+  <view wx:for="{{coupons}}" wx:key="id">
+    <button size="mini" data-id="{{item.id}}" bindtap="chooseCoupon">{{item.name}}</button>
   </view>
-  <view wx:if="{{quote}}">包装 ¥{{quote.packing_cents / 100}} 优惠 ¥{{quote.discount_cents / 100}} 应付 ¥{{quote.payable_cents / 100}}</view>
-  <input maxlength="100" placeholder="备注" bindinput="onRemark" />
-  <button bindtap="pay">支付</button>
+  <view wx:if="{{quote}}">
+    <view wx:for="{{quote.lines}}" wx:key="product_name">{{item.product_name}} x{{item.qty}}</view>
+    商品 ¥{{quote.goods_cents / 100}} 包装 ¥{{quote.packing_cents / 100}} 优惠 ¥{{quote.discount_cents / 100}} 应付 ¥{{quote.payable_cents / 100}}
+  </view>
+  <input maxlength="100" placeholder="备注最多100字" bindinput="onRemark" />
+  <button disabled="{{paying}}" bindtap="pay">支付</button>
 </view>
