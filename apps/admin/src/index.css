@@ -2,4 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-body { font-family: ui-sans-serif, system-ui, sans-serif; }
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",
+    ui-sans-serif, system-ui, sans-serif;
+  background: #f3eee7;
+  color: #1c1917;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@layer components {
+  .df-card {
+    @apply rounded-2xl border border-stone-200 bg-white;
+    box-shadow: 0 1px 2px rgba(28, 25, 23, 0.05), 0 10px 28px rgba(28, 25, 23, 0.05);
+  }
+  .df-input {
+    @apply w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-stone-50 disabled:text-stone-400;
+  }
+  .df-btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .df-btn-primary {
+    @apply bg-brand text-white shadow-sm hover:bg-brand-dark;
+  }
+  .df-btn-secondary {
+    @apply border border-stone-200 bg-white text-stone-700 hover:bg-stone-50;
+  }
+  .df-btn-ghost {
+    @apply text-stone-600 hover:bg-stone-100;
+  }
+  .df-btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700;
+  }
+  .df-btn-success {
+    @apply bg-emerald-600 text-white hover:bg-emerald-700;
+  }
+  .df-table {
+    @apply w-full text-left text-sm;
+  }
+  .df-table th {
+    @apply whitespace-nowrap border-b border-stone-100 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-stone-400;
+  }
+  .df-table td {
+    @apply border-b border-stone-50 px-3 py-2.5 align-middle text-stone-700;
+  }
+  .df-table tbody tr:hover {
+    @apply bg-orange-50/40;
+  }
+  .df-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+}
+
+.df-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.df-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 99px;
+}

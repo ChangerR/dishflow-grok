@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSee, fenToYuan, nextTransition, statusLabel, type NavItem } from "./ui";
+import { canSee, fenToYuan, groupNav, nextTransition, roleLabel, statusLabel, type NavItem } from "./ui";
 
 describe("money and labels", () => {
   it("formats fen", () => {
@@ -19,5 +19,9 @@ describe("money and labels", () => {
   });
   it("platform cannot see store nav", () => {
     expect(canSee("PLATFORM", { to: "/board", label: "工作台", min: "STAFF" })).toBe(false);
+  });
+  it("labels roles and groups nav", () => {
+    expect(roleLabel("OWNER")).toBe("店主");
+    expect(groupNav([{ to: "/a", label: "A", group: "门店" }, { to: "/b", label: "B", group: "履约" }]).map((g) => g.name)).toEqual(["履约", "门店"]);
   });
 });

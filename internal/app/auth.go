@@ -26,6 +26,7 @@ func (a *App) LoginAdmin(ctx context.Context, login, password, ip string) (token
 	err = a.DB.QueryRowContext(ctx, `SELECT id, login_name, display_name, password_hash, is_platform_admin, enabled FROM admin_users WHERE login_name=?`, login).
 		Scan(&u.UserID, &u.LoginName, &u.DisplayName, &hash, &u.IsPlatformAdmin, &u.Enabled)
 	if err == sql.ErrNoRows || !cryptoutil.VerifyPassword(hash, password) {
+		a.recordLoginFailure(ctx, ip, login)
 		return "", principal, apperr.Unauthorized
 	}
 	if err != nil {
@@ -34,6 +35,7 @@ func (a *App) LoginAdmin(ctx context.Context, login, password, ip string) (token
 	if !u.Enabled {
 		return "", principal, apperr.Forbidden
 	}
+	a.clearLoginFailures(ctx, login)
 	tok, err := cryptoutil.RandomHex(32)
 	if err != nil {
 		return "", principal, err
@@ -52,12 +54,33 @@ func (a *App) LoginAdmin(ctx context.Context, login, password, ip string) (token
 	return tok, p, nil
 }
 
+const loginFailureLimit = 10
+
+func loginLimitKeys(ip, login string) []string {
+	return []string{"login:ip:" + ip, "login:user:" + login}
+}
+
 func (a *App) checkLoginLimit(ctx context.Context, ip, login string) error {
 	if a.Redis == nil {
 		return nil
 	}
-	keys := []string{"login:ip:" + ip, "login:user:" + login}
-	for _, k := range keys {
+	for _, k := range loginLimitKeys(ip, login) {
+		n, err := a.Redis.Get(ctx, k).Int64()
+		if err != nil {
+			continue
+		}
+		if n >= loginFailureLimit {
+			return apperr.RateLimited
+		}
+	}
+	return nil
+}
+
+func (a *App) recordLoginFailure(ctx context.Context, ip, login string) {
+	if a.Redis == nil {
+		return
+	}
+	for _, k := range loginLimitKeys(ip, login) {
 		n, err := a.Redis.Incr(ctx, k).Result()
 		if err != nil {
 			continue
@@ -65,11 +88,14 @@ func (a *App) checkLoginLimit(ctx context.Context, ip, login string) error {
 		if n == 1 {
 			_ = a.Redis.Expire(ctx, k, 15*time.Minute).Err()
 		}
-		if n > 10 {
-			return apperr.RateLimited
-		}
 	}
-	return nil
+}
+
+func (a *App) clearLoginFailures(ctx context.Context, login string) {
+	if a.Redis == nil || login == "" {
+		return
+	}
+	_ = a.Redis.Del(ctx, "login:user:"+login).Err()
 }
 
 func (a *App) LogoutAdmin(ctx context.Context, token string) error {

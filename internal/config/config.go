@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
@@ -41,6 +42,7 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	loadDotEnv(".env")
 	keyHex := getenv("SHOP_CREDENTIAL_KEY", "0123456789abcdef0123456789abcdef")
 	key := []byte(keyHex)
 	if len(key) != 32 {
@@ -152,4 +154,63 @@ func splitCSV(v string) []string {
 		}
 	}
 	return out
+}
+
+// loadDotEnv reads a UTF-8 .env (optional BOM) and sets keys that are not already in the environment.
+// Windows PowerShell Get-Content defaults to GBK, which would mojibake Chinese values like BOOTSTRAP_PLATFORM_NAME.
+func loadDotEnv(path string) {
+	m, err := parseDotEnv(path)
+	if err != nil {
+		return
+	}
+	for k, v := range m {
+		cur, ok := os.LookupEnv(k)
+		if !ok || isGBKMojibake(cur, v) {
+			_ = os.Setenv(k, v)
+		}
+	}
+}
+
+func parseDotEnv(path string) (map[string]string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF})
+	out := map[string]string{}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		i := strings.IndexByte(line, '=')
+		if i < 1 {
+			continue
+		}
+		k := strings.TrimSpace(line[:i])
+		v := strings.TrimSpace(line[i+1:])
+		if len(v) >= 2 {
+			if q := v[0]; (q == '"' || q == '\'') && v[len(v)-1] == q {
+				v = v[1 : len(v)-1]
+			}
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// isGBKMojibake reports Windows PowerShell Get-Content (cp936) misreading a UTF-8 Chinese value.
+// The leftover trail byte often becomes ASCII '?'.
+func isGBKMojibake(got, want string) bool {
+	if got == want || want == "" {
+		return false
+	}
+	hasCJK := false
+	for _, r := range want {
+		if r >= 0x4E00 && r <= 0x9FFF {
+			hasCJK = true
+			break
+		}
+	}
+	return hasCJK && strings.Contains(got, "?")
 }
