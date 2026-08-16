@@ -84,6 +84,7 @@ func (a *App) GetOrder(ctx context.Context, storeID, orderID, customerID string,
 	d.TableNo = scanNullString(tableNo)
 	d.Remark = scanNullString(remark)
 	d.PickupNumber = scanNullString(pickupNo)
+	d.PickupBusinessDate = bizDate(d.PickupBusinessDate)
 	d.CreatedAt = created.UTC().Format(time.RFC3339)
 	if paid.Valid {
 		s := paid.Time.UTC().Format(time.RFC3339)
@@ -262,6 +263,7 @@ func (a *App) ConfirmPaid(ctx context.Context, storeID, orderID, txnID string, m
 		if err != nil {
 			return err
 		}
+		biz = bizDate(biz)
 		if payStatus == domain.PaySuccess {
 			return nil
 		}
@@ -333,6 +335,7 @@ func (a *App) ConfirmPaid(ctx context.Context, storeID, orderID, txnID string, m
 }
 
 func sellStockFixed(tx *sql.Tx, storeID, skuID, biz string, qty int, now time.Time, orderID string) error {
+	biz = bizDate(biz)
 	var mode string
 	if err := tx.QueryRow(`SELECT stock_mode FROM skus WHERE id=?`, skuID).Scan(&mode); err != nil {
 		return err
@@ -397,6 +400,7 @@ func (a *App) closeUnpaid(ctx context.Context, storeID, orderID, actor string) e
 		if err := tx.QueryRow(`SELECT status, pickup_business_date FROM orders WHERE id=? AND store_id=? FOR UPDATE`, orderID, storeID).Scan(&status, &biz); err != nil {
 			return err
 		}
+		biz = bizDate(biz)
 		if status == domain.OrderCancelled {
 			return nil
 		}
@@ -443,6 +447,7 @@ func (a *App) closeUnpaid(ctx context.Context, storeID, orderID, actor string) e
 }
 
 func releaseStockFixed(tx *sql.Tx, storeID, skuID, biz string, qty int, now time.Time, orderID, reason string) error {
+	biz = bizDate(biz)
 	var mode string
 	if err := tx.QueryRow(`SELECT stock_mode FROM skus WHERE id=?`, skuID).Scan(&mode); err != nil {
 		return err
@@ -455,6 +460,23 @@ func releaseStockFixed(tx *sql.Tx, storeID, skuID, biz string, qty int, now time
 	}
 	_, err := tx.Exec(`INSERT INTO inventory_movements (id, store_id, sku_id, business_date, delta, reason, order_id, created_at) VALUES (?,?,?,?,?,?,?,?)`,
 		ids.New(), storeID, skuID, biz, qty, reason, orderID, now)
+	return err
+}
+
+func restockSold(tx *sql.Tx, storeID, skuID, biz string, qty int, now time.Time, orderID string) error {
+	biz = bizDate(biz)
+	var mode string
+	if err := tx.QueryRow(`SELECT stock_mode FROM skus WHERE id=?`, skuID).Scan(&mode); err != nil {
+		return err
+	}
+	if mode != domain.StockDaily {
+		return nil
+	}
+	if _, err := tx.Exec(`UPDATE daily_inventory SET sold_qty=GREATEST(sold_qty-?,0) WHERE store_id=? AND sku_id=? AND business_date=?`, qty, storeID, skuID, biz); err != nil {
+		return err
+	}
+	_, err := tx.Exec(`INSERT INTO inventory_movements (id, store_id, sku_id, business_date, delta, reason, order_id, created_at) VALUES (?,?,?,?,?,?,?,?)`,
+		ids.New(), storeID, skuID, biz, qty, "REFUND", orderID, now)
 	return err
 }
 

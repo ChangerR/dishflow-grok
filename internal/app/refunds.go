@@ -131,6 +131,7 @@ func (a *App) ConfirmRefundSuccess(ctx context.Context, storeID, orderID, wechat
 		if err != nil {
 			return err
 		}
+		biz = bizDate(biz)
 		if status == domain.OrderRefunded {
 			return nil
 		}
@@ -139,6 +140,29 @@ func (a *App) ConfirmRefundSuccess(ctx context.Context, storeID, orderID, wechat
 		}
 		if err := a.releaseCapacity(tx, orderID, storeID); err != nil {
 			return err
+		}
+		rows, err := tx.Query(`SELECT sku_id, qty FROM order_items WHERE order_id=?`, orderID)
+		if err != nil {
+			return err
+		}
+		type line struct {
+			sku string
+			qty int
+		}
+		var lines []line
+		for rows.Next() {
+			var l line
+			if err := rows.Scan(&l.sku, &l.qty); err != nil {
+				rows.Close()
+				return err
+			}
+			lines = append(lines, l)
+		}
+		rows.Close()
+		for _, l := range lines {
+			if err := restockSold(tx, storeID, l.sku, biz, l.qty, now, orderID); err != nil {
+				return err
+			}
 		}
 		if !reversed && points > 0 {
 			var membershipID string

@@ -1,4 +1,4 @@
-.PHONY: up down migrate serve worker test vet lint-openapi admin-dev check
+.PHONY: up down migrate serve worker test vet lint-openapi admin-dev check smoke
 
 up:
 	docker compose up -d
@@ -31,3 +31,6 @@ check:
 	pnpm --recursive run check
 	pnpm --recursive run test
 	pnpm --recursive run build
+
+smoke:
+	python3 scripts/http_smoke.py
